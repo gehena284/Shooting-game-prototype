@@ -1,279 +1,250 @@
-// 1. シーン（3D空間）の作成
-const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x87CEEB); // 空の色
+const c = document.getElementById('myCanvas');
+const ctx = c.getContext('2d');
 
-// 2. カメラの作成
-const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-camera.position.set(0, 3, 5); 
+let gameStarted = false;
 
-// 3. レンダラーの作成
-const renderer = new THREE.WebGLRenderer({ antialias: true });
-renderer.setSize(window.innerWidth, window.innerHeight);
-document.body.appendChild(renderer.domElement);
+// 青い円（プレイヤー）の設定
+let x = 200, y = 200;
+let s = 5;
+const keys = {};
 
-// 4. FPS用の視点操作（PointerLockControls）の追加
-const controls = new THREE.PointerLockControls(camera, document.body);
+let hp = 100;
+let invincible = 0; 
 
-// 画面をクリックしたらFPSモードを開始
-document.body.addEventListener('click', () => {
-  controls.lock();
+// 赤い円（オート）の設定
+let rx = 4, ry = 300;
+let dx = 3, dy = 2;
+const r = 20
+let enemyhp = 200; // エネミーのHP
+
+// --- 弾丸の設定 ---
+const bullets = []; // 弾丸を格納する配列
+const bulletSpeed = 7; // 弾の速さ
+let shotInterval = 0; // 連射制限用
+
+onkeydown = onkeyup = e => keys[e.key] = e.type === 'keydown';
+
+const enemyBullets = [];
+const enemyShotIntervalMax = 60;
+let enemyShotInterval = 0;
+
+const playerImg = new Image();
+playerImg.src = "player.png"; // ここに画像パス
+
+const playerSize = 110; // 見た目サイズ
+
+c.addEventListener("click", () => {
+  gameStarted = true;
 });
 
-// --- オブジェクトと光源の配置 ---
+function loop() {
+  if (!gameStarted) {
+    ctx.clearRect(0, 0, c.width, c.height);
+    ctx.fillStyle = "black";
+    ctx.font = "30px sans-serif";
+    ctx.fillText("CLICK TO START", 100, 200);
+    requestAnimationFrame(loop);
+    return;
+  }
 
-// 光源
-const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
-scene.add(ambientLight);
-const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
-directionalLight.position.set(10, 20, 15);
-scene.add(directionalLight);
+  
 
-// 1. 衝突対象のバウンディングボックスを格納する配列を作成
-const obstacleBBs = [];
+  // --- 1. 移動処理 ---
+  if (keys.ArrowUp) y -= s;
+  if (keys.ArrowDown) y += s;
+  if (keys.ArrowLeft) x -= s;
+  if (keys.ArrowRight) x += s;
 
-// 2. 箱を生成して配列に登録する関数（使い回せるようにする）
-function grassblock(x, y, z) {
-  const geometry = new THREE.BoxGeometry(2, 2, 2);
-  const material = new THREE.MeshStandardMaterial({ color: 0x00FF00 });
-  const mesh = new THREE.Mesh(geometry, material);
-  mesh.position.set(x, y, z);
-  scene.add(mesh);
+  x = Math.max(r, Math.min(c.width - r, x));
+  y = Math.max(r, Math.min(c.height - r, y));
 
-  // この箱の当たり判定を生成して配列に追加
-  const bb = new THREE.Box3().setFromObject(mesh);
-  obstacleBBs.push(bb);
-
-  return mesh;
+  // --- 2. 弾丸の発射処理 (Spaceキー) ---
+// W（上）
+if ((keys['w'] || keys['W']) && shotInterval <= 0) {
+  bullets.push({ bx: x, by: y, vx: 0, vy: -bulletSpeed });
+  shotInterval = 10;
 }
 
-// 3. 箱を置く
-grassblock(0, 0, 0);   
-grassblock(0, 0, 2); 
-grassblock(2, 0, 0,); 
-grassblock(2, 0, 2,); 
-grassblock(0, 0, 4); 
-grassblock(2, 0, 4); 
-grassblock(4, 0, 0); 
-grassblock(4, 0, 2); 
-grassblock(4, 0, 4); 
-grassblock(0, 0, 6); 
-grassblock(2, 0, 6); 
-grassblock(4, 0, 6); 
-grassblock(6, 0, 6); 
-grassblock(6, 0, 4); 
-grassblock(6, 0, 2); 
-grassblock(6, 0, 0); 
-grassblock(0, 0, -2);   //ここから左奥
-grassblock(-2, 0, 0,); 
-grassblock(-2, 0, -2,); 
-grassblock(0, 0, -4); 
-grassblock(-2, 0, -4); 
-grassblock(-4, 0, 0); 
-grassblock(-4, 0, -2); 
-grassblock(-4, 0, -4); 
-grassblock(0, 0, -6); 
-grassblock(-2, 0, -6); 
-grassblock(-4, 0, -6); 
-grassblock(-6, 0, -6); 
-grassblock(-6, 0, -4); 
-grassblock(-6, 0, -2); 
-grassblock(-6, 0, 0); 
-grassblock(-2, 0, 2,);   //ここからは左側
-grassblock(-2, 0, 4,);
-grassblock(-2, 0, 6,);
-grassblock(-4, 0, 2,);
-grassblock(-4, 0, 4,);
-grassblock(-4, 0, 6,);
-grassblock(-6, 0, 2,);
-grassblock(-6, 0, 4,);
-grassblock(-6, 0, 6,);
-grassblock(2, 0, -2,);    //ここから右奥
-grassblock(2, 0, -4,);
-grassblock(2, 0, -6,);
-grassblock(4, 0, -2,);
-grassblock(4, 0, -4,);
-grassblock(4, 0, -6,);
-grassblock(6, 0, -2,);
-grassblock(6, 0, -4,);
-grassblock(6, 0, -6,);
-
-function stoneblock(x, y, z) {
-  const geometry = new THREE.BoxGeometry(2, 2, 2);
-  const material = new THREE.MeshStandardMaterial({ color: 0x808080 });
-  const mesh = new THREE.Mesh(geometry, material);
-  mesh.position.set(x, y, z);
-  scene.add(mesh);
-
-  // この箱の当たり判定を生成して配列に追加
-  const bb = new THREE.Box3().setFromObject(mesh);
-  obstacleBBs.push(bb);
-
-  return mesh;
+// S（下）
+if ((keys['s'] || keys['S']) && shotInterval <= 0) {
+  bullets.push({ bx: x, by: y, vx: 0, vy: bulletSpeed });
+  shotInterval = 10;
 }
-stoneblock(0, -2, 0);   
-stoneblock(0, -2, 2); 
-stoneblock(2, -2, 0,); 
-stoneblock(2, -2, 2,); 
-stoneblock(0, -2, 4); 
-stoneblock(2, -2, 4); 
-stoneblock(4, -2, 0); 
-stoneblock(4, -2, 2); 
-stoneblock(4, -2, 4); 
-stoneblock(0, -2, 6); 
-stoneblock(2, -2, 6); 
-stoneblock(4, -2, 6); 
-stoneblock(6, -2, 6); 
-stoneblock(6, -2, 4); 
-stoneblock(6, -2, 2); 
-stoneblock(6, -2, 0); 
-stoneblock(0, -2, -2); //ここから左奥
-stoneblock(-2, -2, 0);
-stoneblock(-2, -2, -2,); 
-stoneblock(0, -2, -4); 
-stoneblock(-2, -2, -4); 
-stoneblock(-4, -2, 0); 
-stoneblock(-4, -2, -2); 
-stoneblock(-4, -2, -4); 
-stoneblock(0, -2, -6); 
-stoneblock(-2, -2, -6); 
-stoneblock(-4, -2, -6); 
-stoneblock(-6, -2, -6); 
-stoneblock(-6, -2, -4); 
-stoneblock(-6, -2, -2); 
-stoneblock(-6, -2, 0); 
-stoneblock(-2, -2, 2,);   //ここからは左側
-stoneblock(-2, -2, 4,);
-stoneblock(-2, -2, 6,);
-stoneblock(-4, -2, 2,);
-stoneblock(-4, -2, 4,);
-stoneblock(-4, -2, 6,);
-stoneblock(-6, -2, 2,);
-stoneblock(-6, -2, 4,);
-stoneblock(-6, -2, 6,);
-stoneblock(2, -2, -2,);    //ここから右奥
-stoneblock(2, -2, -4,);
-stoneblock(2, -2, -6,);
-stoneblock(4, -2, -2,);
-stoneblock(4, -2, -4,);
-stoneblock(4, -2, -6,);
-stoneblock(6, -2, -2,);
-stoneblock(6, -2, -4,);
-stoneblock(6, -2, -6,);
 
-// --- キーボード移動の制御ロジック ---
-const moveState = { forward: false, backward: false, left: false, right: false, up: false, down: false };
-const moveSpeed = 0.1;
+// A（左）
+if ((keys['a'] || keys['A']) && shotInterval <= 0) {
+  bullets.push({ bx: x, by: y, vx: -bulletSpeed, vy: 0 });
+  shotInterval = 10;
+}
 
-const gravity = 0.01;      // 重力
-const jumpPower = 0.25;    // ジャンプ力
-let velocityY = 0;         // Y方向の速度
-let onGround = false;      // 地面にいるか
+// D（右）
+if ((keys['d'] || keys['D']) && shotInterval <= 0) {
+  bullets.push({ bx: x, by: y, vx: bulletSpeed, vy: 0 });
+  shotInterval = 10;
+}
+  if (shotInterval > 0) shotInterval--;
 
-window.addEventListener('keydown', (e) => {
-  switch (e.code) {
-    case 'KeyW': moveState.forward = true; break;
-    case 'KeyS': moveState.backward = true; break;
-    case 'KeyA': moveState.left = true; break;
-    case 'KeyD': moveState.right = true; break;
-    case 'Space':
-  if (onGround) {
-    velocityY = jumpPower;
-    onGround = false;
-  }
-  break;
-  }
-});
+// --- 3. エネミーの移動処理 ---
 
-window.addEventListener('keyup', (e) => {
-  switch (e.code) {
-    case 'KeyW': moveState.forward = false; break;
-    case 'KeyS': moveState.backward = false; break;
-    case 'KeyA': moveState.left = false; break;
-    case 'KeyD': moveState.right = false; break;
-  }
-});
+if (Math.random() < 0.04) {
+  dx = (Math.random() - 0.5) * 30;
+  dy = (Math.random() - 0.5) * 30;
+}
 
-// 5. 描画ループ（アニメーション）
-function animate() {
-  requestAnimationFrame(animate);
+// 2. プレイヤーをゆるやかに追尾する要素
+const angle = Math.atan2(y - ry, x - rx);
+const chaseForce = 0.2; // 追尾の強さ
+dx += Math.cos(angle) * chaseForce;
+dy += Math.sin(angle) * chaseForce;
 
-  if (controls.isLocked) {
-    // プレイヤーのサイズ定義（使い回すためのヘルパー関数）
-    const getPlayerBB = () => {
-      return new THREE.Box3(
-        new THREE.Vector3(camera.position.x - 0.3, camera.position.y - 1.7, camera.position.z - 0.3),
-        new THREE.Vector3(camera.position.x + 0.3, camera.position.y,       camera.position.z + 0.3)
-      );
-    };
+// 3. 移動速度が速くなりすぎないように制限
+const speed = Math.hypot(dx, dy);
+if (speed > 5) {
+  dx = (dx / speed) * 5;
+  dy = (dy / speed) * 5;
+}
 
-    // --- 1. Z軸方向（前後）の移動と判定 ---
-    const posBeforeZ = camera.position.clone();
-    
-    // 前後の移動だけを実行
-    if (moveState.forward)  controls.moveForward(moveSpeed);
-    if (moveState.backward) controls.moveForward(-moveSpeed);
-    
-    // Z軸移動後の判定。ぶつかっていたらZだけ戻す（Xは維持）
-    if (obstacleBBs.some(boxBB => getPlayerBB().intersectsBox(boxBB))) {
-      camera.position.z = posBeforeZ.z;
-      // moveForwardはカメラの向きによってXも動かすため、厳密にはXも戻す必要がある場合があるが、
-      // 簡易的には一度座標を完全に戻してから、改めて個別に処理するのが安全。
-      camera.position.x = posBeforeZ.x; 
+// 4. 座標を更新
+rx += dx;
+ry += dy;
+
+// 5. 画面外に出ないように制限
+rx = Math.max(r, Math.min(c.width - r, rx));
+ry = Math.max(r, Math.min(c.height - r, ry));
+
+  // --- 敵の弾発射（4方向）---
+if (enemyShotInterval <= 0) {
+  enemyBullets.push({ bx: rx, by: ry, vx: 5, vy: 0 });  // 右
+  enemyBullets.push({ bx: rx, by: ry, vx: -5, vy: 0 }); // 左
+  enemyBullets.push({ bx: rx, by: ry, vx: 0, vy: 5 });  // 下
+  enemyBullets.push({ bx: rx, by: ry, vx: 0, vy: -5 }); // 上
+  enemyBullets.push({ bx: rx, by: ry, vx: -3.5, vy: -3.5 }); 
+  enemyBullets.push({ bx: rx, by: ry, vx: -3.5, vy: 3.5 }); 
+  enemyBullets.push({ bx: rx, by: ry, vx: 3.5, vy: -3.5 }); 
+  enemyBullets.push({ bx: rx, by: ry, vx: 3.5, vy: 3.5 }); 
+
+  enemyShotInterval = enemyShotIntervalMax;
+}
+enemyShotInterval--;
+
+  // --- 4. 当たり判定と描画 ---
+  ctx.clearRect(0, 0, c.width, c.height);
+
+  // 弾丸の移動とエネミーへの当たり判定
+  ctx.fillStyle = 'black';
+  for (let i = bullets.length - 1; i >= 0; i--) {
+    let b = bullets[i];
+   b.bx += b.vx;
+   b.by += b.vy;
+
+    // 弾の描画
+    ctx.beginPath();
+    ctx.arc(b.bx, b.by, 5, 0, Math.PI * 2);
+    ctx.fill();
+
+    // エネミーとの当たり判定
+    const distE = Math.hypot(b.bx - rx, b.by - ry);
+    if (distE < r + 5) {
+      enemyhp -= 5;   // エネミーにダメージ
+      bullets.splice(i, 1); // 弾を消す
+
+        // ノックバック
+      const hitAngle = Math.atan2(ry - b.by, rx - b.bx);
+      rx += Math.cos(hitAngle) * 10;
+      ry += Math.sin(hitAngle) * 10;
+
+      continue;
     }
 
-    // --- 2. X軸方向（左右）の移動と判定 ---
-    const posBeforeX = camera.position.clone();
-    
-    // 左右の移動だけを実行
-    if (moveState.left)  controls.moveRight(-moveSpeed);
-    if (moveState.right) controls.moveRight(moveSpeed);
-    
-    // X軸移動後の判定。ぶつかっていたらXだけ戻す
-    if (obstacleBBs.some(boxBB => getPlayerBB().intersectsBox(boxBB))) {
-      camera.position.x = posBeforeX.x;
-      camera.position.z = posBeforeX.z;
-    }
-
-// --- 3. Y軸方向（垂直）の移動と判定 ---
-
-// 移動前の位置を保存
-const posBeforeY = camera.position.clone();
-
-// 重力
-velocityY -= gravity;
-
-// 落下・ジャンプ
-camera.position.y += velocityY;
-
-// 当たり判定
-if (obstacleBBs.some(boxBB => getPlayerBB().intersectsBox(boxBB))) {
-
-    // 落下していたら着地
-    if (velocityY < 0) {
-        onGround = true;
-    }
-
-    // 元の高さに戻す
-    camera.position.y = posBeforeY.y;
-    velocityY = 0;
-}
-else {
-    onGround = false;
+    // 画面外に出たら消す
+  if (
+  b.bx < 0 || b.bx > c.width ||
+  b.by < 0 || b.by > c.height
+) {
+  bullets.splice(i, 1);
 }
   }
 
-  //奈落の底
-  if (camera.position.y <-20) {
-camera.position.set(0, 3, 5)
+    //球の描写
+  ctx.fillStyle = 'purple';
+ for (let i = enemyBullets.length - 1; i >= 0; i--) {
+  let b = enemyBullets[i];
+
+  b.bx += b.vx;
+  b.by += b.vy;
+
+  ctx.beginPath();
+  ctx.arc(b.bx, b.by, 5, 0, Math.PI * 2);
+  ctx.fill();
+
+  // プレイヤーとの当たり判定
+  const dist = Math.hypot(b.bx - x, b.by - y);
+  if (dist < r + 5) {
+    if (invincible <= 0) {
+      hp -= 5;
+      invincible = 30;
+    }
+    enemyBullets.splice(i, 1);
+    continue;
   }
 
-  renderer.render(scene, camera);
+  // 画面外削除
+  if (
+    b.bx < 0 || b.bx > c.width ||
+    b.by < 0 || b.by > c.height
+  ) {
+    enemyBullets.splice(i, 1);
+  }
 }
-animate();
 
-// レスポンシブ対応
-window.addEventListener('resize', () => {
-  camera.aspect = window.innerWidth / window.innerHeight;
-  camera.updateProjectionMatrix();
-  renderer.setSize(window.innerWidth, window.innerHeight);
-});
+  // プレイヤーとエネミーの接触判定
+    const playerRadius = playerSize / 2;
+    const distP = Math.hypot(x - rx, y - ry);
+    if (distP < playerRadius + r) {
+    if (invincible <= 0) {
+      hp -= 10;
+      invincible = 30;
+    }
+  }
+
+  // プレイヤー
+  ctx.imageSmoothingEnabled = false;
+
+  ctx.drawImage(
+  playerImg,
+  x - playerSize / 2,
+  y - playerSize / 2,
+  playerSize,
+  playerSize
+);
+
+  // 赤い円（エネミー）
+  ctx.beginPath();
+  ctx.arc(rx, ry, r, 0, Math.PI * 2);
+  ctx.fillStyle = 'red';
+  ctx.fill();
+  ctx.stroke();
+
+  if (invincible > 0) invincible--;
+
+  // UI表示
+  ctx.fillStyle = 'black';
+  ctx.font = '20px sans-serif';
+  ctx.fillText("PLAYER HP: " + hp, 10, 30);
+  ctx.fillText("ENEMY HP: " + enemyhp, 10, 60);
+
+  // 終了判定
+  if (hp <= 0) {
+    ctx.font = '40px sans-serif';
+    ctx.fillText("GAME OVER", 100, 200);
+    return; 
+  }
+  if (enemyhp <= 0) {
+    ctx.font = '70px sans-serif';
+    ctx.fillText("YOU WIN", 100, 200);
+    return; 
+  }
+
+  requestAnimationFrame(loop);
+}
+loop();
